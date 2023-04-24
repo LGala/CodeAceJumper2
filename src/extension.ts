@@ -17,7 +17,7 @@ export class IncrementalStringGenerator {
 	private alphabet: string;
 	private alphabetIndexes: number[];
 
-	constructor(placeholdersToGenerateCount: number, alphabet = 'qwertyuiopasdfghjklzxcvbnm') {
+	constructor(placeholdersToGenerateCount: number, alphabet = 'abcdefghijklmnopqrstuvwxyz') {
 		this.alphabetIndexes = [0];
 		this.alphabet = alphabet;
 		let combinationsCount = this.alphabet.length;
@@ -79,7 +79,7 @@ const getDecoration = (contentText: string) =>
 		},
 	});
 
-const getCharPlaceholder = ({ absoluteIndex }: Char, placeholderGenerator: IncrementalStringGenerator): Placeholder => {
+const getPlaceholder = ({ absoluteIndex }: Char, placeholderGenerator: IncrementalStringGenerator): Placeholder => {
 	const placeholder = placeholderGenerator.next();
 
 	return {
@@ -93,7 +93,7 @@ const getCharPlaceholder = ({ absoluteIndex }: Char, placeholderGenerator: Incre
 };
 
 const isCharJumpable = ({ char, absoluteIndex }: Char, tokens: string[], selectedChar: string): boolean =>
-	char === selectedChar &&
+	char.toLowerCase() === selectedChar &&
 	selectedChar !== '\n' &&
 	(/[\p{P}\s\n]/gu.test(char) || /[\p{P}\s\n]/gu.test(tokens[absoluteIndex - 1]) || absoluteIndex === 0);
 
@@ -106,7 +106,7 @@ const getSingleJumpableCharsPlaceholders = (selectedChar: string): Placeholder[]
 
 	const placeholderGenerator = new IncrementalStringGenerator(jumpableChars.length);
 
-	return jumpableChars.map(char => getCharPlaceholder(char, placeholderGenerator));
+	return jumpableChars.map(char => getPlaceholder(char, placeholderGenerator));
 };
 
 const unhighLightPlaceholders = (charsToUnhighLight: Placeholder[]) => {
@@ -173,26 +173,35 @@ const earlyJumpOrPutPlaceholders = (placeholders: Placeholder[]): SingleCharJump
 	return 'wait-to-jump-for-another-typing';
 };
 
+const checkForExit = (
+	placeholders: Placeholder[],
+	command: Disposable,
+	selectedChar: string,
+	status: SingleCharJumpStatus,
+) => {
+	if (selectedChar === '\n' || status === 'want-to-exit') {
+		unhighLightPlaceholders(placeholders);
+		command.dispose();
+	}
+};
+
 const singleCharJump = () => {
 	let status: SingleCharJumpStatus = 'init';
 	let placeholders: Placeholder[];
 
 	const command = commands.registerCommand('type', ({ text: selectedChar }: { text: string }) => {
+		selectedChar = selectedChar.toLowerCase();
 		placeholders ||= getSingleJumpableCharsPlaceholders(selectedChar);
 
-		if (selectedChar === '\n') {
-			unhighLightPlaceholders(placeholders);
-			command.dispose();
-		} else if (status === 'init') {
+		checkForExit(placeholders, command, selectedChar, status);
+
+		if (status === 'init') {
 			status = earlyJumpOrPutPlaceholders(placeholders);
 		} else if (status === 'wait-to-jump-for-another-typing') {
-			[status, placeholders] = tryJumpToPlaceholder(placeholders, selectedChar.toLowerCase());
+			[status, placeholders] = tryJumpToPlaceholder(placeholders, selectedChar);
 		}
 
-		if (status === 'want-to-exit') {
-			unhighLightPlaceholders(placeholders);
-			command.dispose();
-		}
+		checkForExit(placeholders, command, selectedChar, status);
 	});
 };
 
