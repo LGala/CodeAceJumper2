@@ -1,136 +1,197 @@
-import { Selection } from 'vscode';
-import { Disposable, ExtensionContext, Range, TextDocument, TextEditorDecorationType, commands, window } from 'vscode';
+import {
+	Position,
+	Selection,
+	Disposable,
+	ExtensionContext,
+	Range,
+	TextEditorDecorationType,
+	commands,
+	window,
+} from 'vscode';
 
-type CharPlaceholderRange = { range: Range; decoration: TextEditorDecorationType; currentJumpPlaceholder: string };
+type Placeholder = { range: Range; decoration: TextEditorDecorationType; placeholder: string };
+type Char = { char: string; absoluteIndex: number };
+type SingleCharJumpStatus = 'init' | 'wait-to-jump-for-another-typing' | 'want-to-exit';
+
+export class IncrementalStringGenerator {
+	private alphabet: string;
+	private alphabetIndexes: number[];
+
+	constructor(placeholdersToGenerateCount: number, alphabet = 'qwertyuiopasdfghjklzxcvbnm') {
+		this.alphabetIndexes = [0];
+		this.alphabet = alphabet;
+		let combinationsCount = this.alphabet.length;
+
+		while (placeholdersToGenerateCount > combinationsCount) {
+			this.alphabetIndexes.push(0);
+			combinationsCount *= combinationsCount;
+		}
+	}
+
+	next() {
+		const generatedStringAsList = [];
+		for (const char of this.alphabetIndexes) {
+			generatedStringAsList.unshift(this.alphabet[char]);
+		}
+		this.increment();
+		return generatedStringAsList.join('');
+	}
+
+	private increment() {
+		for (let i = 0; i < this.alphabetIndexes.length; i++) {
+			if (++this.alphabetIndexes[i] >= this.alphabet.length) {
+				this.alphabetIndexes[i] = 0;
+			} else {
+				return;
+			}
+		}
+		this.alphabetIndexes.push(0);
+	}
+
+	*[Symbol.iterator]() {
+		while (true) {
+			yield this.next();
+		}
+	}
+}
+
+const jumpToPosition = (position: Position) => {
+	if (position) {
+		window.activeTextEditor!.selection = new Selection(position, position);
+	}
+};
+
+const getDocument = () => window.activeTextEditor?.document!;
+
+const getVisibleChars = () => getDocument().getText(window.activeTextEditor?.visibleRanges.at(0)!).split('');
+
+const getOffset = () => getDocument().offsetAt(window.activeTextEditor?.visibleRanges.at(0)!.start!)!;
 
 const getDecoration = (contentText: string) =>
 	window.createTextEditorDecorationType({
 		letterSpacing: '-16px',
 		opacity: '0',
 		after: {
-			color: '#000000',
-			backgroundColor: '#8B8000',
+			color: '#0f18b6',
+			backgroundColor: '#f0e749',
+			fontWeight: 'bolder',
 			contentText,
 		},
 	});
 
-const getCharPlaceholders = (
-	jumpableChars: { char: string; absoluteIndex: number }[],
-	document: TextDocument,
-	offset: number,
-) => {
-	const charsToHighLight: CharPlaceholderRange[] = [];
-	let currentJumpPlaceholderAsList = ['a'];
-	let currentJumpPlaceholder = 'a';
-	let lastJumpPlaceholderAsListPosition = 0;
-	let lastUsedLetterIndex = 0;
-	const allLetters = [
-		'a',
-		'b',
-		'c',
-		'd',
-		'e',
-		'f',
-		'g',
-		'h',
-		'i',
-		'j',
-		'k',
-		'l',
-		'm',
-		'n',
-		'o',
-		'p',
-		'q',
-		'r',
-		's',
-		't',
-		'u',
-		'v',
-		'w',
-		'x',
-		'y',
-		'z',
-	];
+const getCharPlaceholder = ({ absoluteIndex }: Char, placeholderGenerator: IncrementalStringGenerator): Placeholder => {
+	const placeholder = placeholderGenerator.next();
 
-	for (let i = 0; i < jumpableChars.length; i++) {
-		if (lastUsedLetterIndex < allLetters.length - 1) {
-			currentJumpPlaceholderAsList[lastJumpPlaceholderAsListPosition] = allLetters[lastUsedLetterIndex++];
-			currentJumpPlaceholder = currentJumpPlaceholderAsList.join('');
-		} else {
-			currentJumpPlaceholderAsList.push('a');
-			lastJumpPlaceholderAsListPosition++;
-			lastUsedLetterIndex = 0;
-		}
-
-		charsToHighLight.push({
-			range: new Range(
-				document!.positionAt(jumpableChars[i].absoluteIndex + offset)!,
-				document!.positionAt(jumpableChars[i].absoluteIndex + 1 + offset)!,
-			),
-			decoration: getDecoration(currentJumpPlaceholder),
-			currentJumpPlaceholder,
-		});
-	}
-
-	return charsToHighLight;
+	return {
+		range: new Range(
+			getDocument()!.positionAt(absoluteIndex + getOffset())!,
+			getDocument()!.positionAt(absoluteIndex + 1 + getOffset())!,
+		),
+		decoration: getDecoration(placeholder),
+		placeholder,
+	};
 };
 
-const getSingleJumpableCharsPlaceholders = (charToHighLight: string): CharPlaceholderRange[] => {
-	const document = window.activeTextEditor?.document!;
-	const visibleRange = window.activeTextEditor?.visibleRanges.at(0)!;
-	const tokens = document.getText(visibleRange).split('');
+const isCharJumpable = ({ char, absoluteIndex }: Char, tokens: string[], selectedChar: string): boolean =>
+	char === selectedChar &&
+	selectedChar !== '\n' &&
+	(/[\p{P}\s\n]/gu.test(char) || /[\p{P}\s\n]/gu.test(tokens[absoluteIndex - 1]) || absoluteIndex === 0);
 
-	console.log(charToHighLight);
+const getSingleJumpableCharsPlaceholders = (selectedChar: string): Placeholder[] => {
+	const tokens = getVisibleChars();
 
-	const byJumpableChars = ({ char, absoluteIndex }: { char: string; absoluteIndex: number }): boolean =>
-		char === charToHighLight &&
-		charToHighLight !== '\n' &&
-		(/[\p{P}\s\n]/gu.test(char) || /[\p{P}\s\n]/gu.test(tokens[absoluteIndex - 1]) || absoluteIndex === 0);
+	const jumpableChars: Char[] = tokens
+		.map((char, absoluteIndex) => ({ char, absoluteIndex }))
+		.filter(char => isCharJumpable(char, tokens, selectedChar));
 
-	const jumpableChars = tokens.map((char, absoluteIndex) => ({ char, absoluteIndex })).filter(byJumpableChars);
+	const placeholderGenerator = new IncrementalStringGenerator(jumpableChars.length);
 
-	return getCharPlaceholders(jumpableChars, document, document.offsetAt(visibleRange.start)!);
+	return jumpableChars.map(char => getCharPlaceholder(char, placeholderGenerator));
 };
 
-const exitFromCommand = (diposable: Disposable, charsToUnhighLight: CharPlaceholderRange[]): 'init' => {
+const unhighLightPlaceholders = (charsToUnhighLight: Placeholder[]) => {
 	charsToUnhighLight.forEach(({ decoration }) => {
 		window.activeTextEditor?.setDecorations(decoration, []);
 	});
-	diposable.dispose();
-	return 'init';
 };
 
-const putPlaceholdersOnJumpableChars = ({ range: charToHighLightRange, decoration }: CharPlaceholderRange) => {
-	window.activeTextEditor?.setDecorations(decoration, [charToHighLightRange]);
+const putPlaceholdersOnJumpableChars = ({ range, decoration }: Placeholder) => {
+	window.activeTextEditor?.setDecorations(decoration, [range]);
+};
+
+const getPlaceholdersWithPlaceholderRemoved = (
+	placeholders: Placeholder[],
+	placeholderSelectedSoFar: string,
+): Placeholder[] => {
+	return placeholders
+		.filter(({ placeholder }) => placeholder.startsWith(placeholderSelectedSoFar))
+		.map(({ placeholder, range }) => {
+			const newPlaceholder = placeholder.replace(placeholderSelectedSoFar, '');
+			return {
+				range,
+				decoration: getDecoration(newPlaceholder),
+				placeholder: newPlaceholder,
+			};
+		});
+};
+
+const tryJumpToPlaceholder = (
+	placeholders: Placeholder[],
+	selctedChar: string,
+): [SingleCharJumpStatus, Placeholder[]] => {
+	if (placeholders.at(0)?.placeholder.length! > 1) {
+		const nextPlaceHolders = getPlaceholdersWithPlaceholderRemoved(placeholders, selctedChar);
+		unhighLightPlaceholders(placeholders);
+		nextPlaceHolders.forEach(putPlaceholdersOnJumpableChars);
+
+		if (nextPlaceHolders.length === 1) {
+			jumpToPosition(nextPlaceHolders[0]!.range!.start!);
+			return ['want-to-exit', nextPlaceHolders];
+		}
+
+		return ['wait-to-jump-for-another-typing', nextPlaceHolders];
+	}
+
+	const positionToJump = placeholders.find(({ placeholder }) => selctedChar === placeholder);
+
+	jumpToPosition(positionToJump?.range.start!);
+
+	return ['want-to-exit', placeholders];
+};
+
+const earlyJumpOrPutPlaceholders = (placeholders: Placeholder[]): SingleCharJumpStatus => {
+	if (!placeholders.length) {
+		return 'want-to-exit';
+	}
+
+	if (placeholders.length === 1) {
+		jumpToPosition(placeholders[0]!.range!.start!);
+		return 'want-to-exit';
+	}
+
+	placeholders.forEach(putPlaceholdersOnJumpableChars);
+	return 'wait-to-jump-for-another-typing';
 };
 
 const singleCharJump = () => {
-	let status: 'init' | 'single-char-jump-decided-char' = 'init';
-	let charsToHighLight: CharPlaceholderRange[];
+	let status: SingleCharJumpStatus = 'init';
+	let placeholders: Placeholder[];
 
-	const disposeOnCharPressed = commands.registerCommand('type', ({ text: selectedChar }: { text: string }) => {
-		charsToHighLight ||= getSingleJumpableCharsPlaceholders(selectedChar);
+	const command = commands.registerCommand('type', ({ text: selectedChar }: { text: string }) => {
+		placeholders ||= getSingleJumpableCharsPlaceholders(selectedChar);
 
 		if (selectedChar === '\n') {
-			status = exitFromCommand(disposeOnCharPressed, charsToHighLight);
+			unhighLightPlaceholders(placeholders);
+			command.dispose();
 		} else if (status === 'init') {
-			if (charsToHighLight.length === 1) {
-				const positionToJump = charsToHighLight.find(
-					({ currentJumpPlaceholder }) => selectedChar === currentJumpPlaceholder,
-				)?.range.start!;
-				window.activeTextEditor!.selection = new Selection(positionToJump, positionToJump);
-				exitFromCommand(disposeOnCharPressed, charsToHighLight);
-			} else {
-				charsToHighLight.forEach(putPlaceholdersOnJumpableChars);
-				status = 'single-char-jump-decided-char';
-			}
-		} else if (status === 'single-char-jump-decided-char') {
-			const positionToJump = charsToHighLight.find(
-				({ currentJumpPlaceholder }) => selectedChar === currentJumpPlaceholder,
-			)?.range.start!;
-			window.activeTextEditor!.selection = new Selection(positionToJump, positionToJump);
-			status = exitFromCommand(disposeOnCharPressed, charsToHighLight);
+			status = earlyJumpOrPutPlaceholders(placeholders);
+		} else if (status === 'wait-to-jump-for-another-typing') {
+			[status, placeholders] = tryJumpToPlaceholder(placeholders, selectedChar.toLowerCase());
+		}
+
+		if (status === 'want-to-exit') {
+			unhighLightPlaceholders(placeholders);
+			command.dispose();
 		}
 	});
 };
