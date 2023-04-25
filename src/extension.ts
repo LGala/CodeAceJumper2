@@ -7,6 +7,7 @@ import {
 	TextEditorDecorationType,
 	commands,
 	window,
+	workspace,
 } from 'vscode';
 
 type Placeholder = { range: Range; decoration: TextEditorDecorationType; placeholder: string };
@@ -55,7 +56,7 @@ export class IncrementalStringGenerator {
 	}
 }
 
-const jumpToPosition = (position: Position) => {
+const jumpToPosition = (position: Position | undefined) => {
 	if (position) {
 		window.activeTextEditor!.selection = new Selection(position, position);
 	}
@@ -67,13 +68,16 @@ const getVisibleChars = () => getDocument().getText(window.activeTextEditor?.vis
 
 const getOffset = () => getDocument().offsetAt(window.activeTextEditor?.visibleRanges.at(0)!.start!)!;
 
+const getSetting = (settingName: string, defaultValue: string) =>
+	workspace.getConfiguration().get(settingName, defaultValue);
+
 const getDecoration = (contentText: string) =>
 	window.createTextEditorDecorationType({
 		letterSpacing: '-16px',
 		opacity: '0',
 		after: {
-			color: '#0f18b6',
-			backgroundColor: '#f0e749',
+			backgroundColor: getSetting('codeacejumper2.placeholder.backgroundColor', '#f0e749'),
+			color: getSetting('codeacejumper2.placeholder.color', '#0f18b6'),
 			fontWeight: 'bolder',
 			contentText,
 		},
@@ -92,25 +96,25 @@ const getPlaceholder = ({ absoluteIndex }: Char, placeholderGenerator: Increment
 	};
 };
 
-const isCharJumpable = ({ char, absoluteIndex }: Char, tokens: string[], selectedChar: string): boolean =>
+const isCharJumpable = ({ char, absoluteIndex }: Char, visibleChars: string[], selectedChar: string): boolean =>
 	char.toLowerCase() === selectedChar &&
 	selectedChar !== '\n' &&
-	(/[\p{P}\s\n]/gu.test(char) || /[\p{P}\s\n]/gu.test(tokens[absoluteIndex - 1]) || absoluteIndex === 0);
+	(/[\p{P}\s\n]/gu.test(char) || /[\p{P}\s\n]/gu.test(visibleChars[absoluteIndex - 1]) || absoluteIndex === 0);
 
-const getSingleJumpableCharsPlaceholders = (selectedChar: string): Placeholder[] => {
-	const tokens = getVisibleChars();
+const getInitialPlaceholders = (selectedChar: string): Placeholder[] => {
+	const visibleChars = getVisibleChars();
 
-	const jumpableChars: Char[] = tokens
+	const jumpableChars: Char[] = visibleChars
 		.map((char, absoluteIndex) => ({ char, absoluteIndex }))
-		.filter(char => isCharJumpable(char, tokens, selectedChar));
+		.filter(char => isCharJumpable(char, visibleChars, selectedChar));
 
 	const placeholderGenerator = new IncrementalStringGenerator(jumpableChars.length);
 
 	return jumpableChars.map(char => getPlaceholder(char, placeholderGenerator));
 };
 
-const unhighLightPlaceholders = (charsToUnhighLight: Placeholder[]) => {
-	charsToUnhighLight.forEach(({ decoration }) => {
+const removePlaceholders = (placeholders: Placeholder[]) => {
+	placeholders.forEach(({ decoration }) => {
 		window.activeTextEditor?.setDecorations(decoration, []);
 	});
 };
@@ -119,14 +123,11 @@ const putPlaceholdersOnJumpableChars = ({ range, decoration }: Placeholder) => {
 	window.activeTextEditor?.setDecorations(decoration, [range]);
 };
 
-const getPlaceholdersWithPlaceholderRemoved = (
-	placeholders: Placeholder[],
-	placeholderSelectedSoFar: string,
-): Placeholder[] => {
+const getPlaceholdersWithSelectedCharRemoved = (placeholders: Placeholder[], selectedChar: string): Placeholder[] => {
 	return placeholders
-		.filter(({ placeholder }) => placeholder.startsWith(placeholderSelectedSoFar))
+		.filter(({ placeholder }) => placeholder.startsWith(selectedChar))
 		.map(({ placeholder, range }) => {
-			const newPlaceholder = placeholder.replace(placeholderSelectedSoFar, '');
+			const newPlaceholder = placeholder.replace(selectedChar, '');
 			return {
 				range,
 				decoration: getDecoration(newPlaceholder),
@@ -140,8 +141,8 @@ const tryJumpToPlaceholder = (
 	selctedChar: string,
 ): [SingleCharJumpStatus, Placeholder[]] => {
 	if (placeholders.at(0)?.placeholder.length! > 1) {
-		const nextPlaceHolders = getPlaceholdersWithPlaceholderRemoved(placeholders, selctedChar);
-		unhighLightPlaceholders(placeholders);
+		const nextPlaceHolders = getPlaceholdersWithSelectedCharRemoved(placeholders, selctedChar);
+		removePlaceholders(placeholders);
 		nextPlaceHolders.forEach(putPlaceholdersOnJumpableChars);
 
 		if (nextPlaceHolders.length === 1) {
@@ -173,27 +174,29 @@ const earlyJumpOrPutPlaceholders = (placeholders: Placeholder[]): SingleCharJump
 	return 'wait-to-jump-for-another-typing';
 };
 
-const checkForExit = (
+const checkIfShouldExit = (
 	placeholders: Placeholder[],
 	command: Disposable,
 	selectedChar: string,
 	status: SingleCharJumpStatus,
 ) => {
 	if (selectedChar === '\n' || status === 'want-to-exit') {
-		unhighLightPlaceholders(placeholders);
+		removePlaceholders(placeholders);
 		command.dispose();
 	}
 };
 
 const singleCharJump = () => {
+	console.log(workspace.getConfiguration().get('codeacejumper2.placeholder.color', 'hello'));
+
 	let status: SingleCharJumpStatus = 'init';
 	let placeholders: Placeholder[];
 
 	const command = commands.registerCommand('type', ({ text: selectedChar }: { text: string }) => {
 		selectedChar = selectedChar.toLowerCase();
-		placeholders ||= getSingleJumpableCharsPlaceholders(selectedChar);
+		placeholders ||= getInitialPlaceholders(selectedChar);
 
-		checkForExit(placeholders, command, selectedChar, status);
+		checkIfShouldExit(placeholders, command, selectedChar, status);
 
 		if (status === 'init') {
 			status = earlyJumpOrPutPlaceholders(placeholders);
@@ -201,7 +204,7 @@ const singleCharJump = () => {
 			[status, placeholders] = tryJumpToPlaceholder(placeholders, selectedChar);
 		}
 
-		checkForExit(placeholders, command, selectedChar, status);
+		checkIfShouldExit(placeholders, command, selectedChar, status);
 	});
 };
 
