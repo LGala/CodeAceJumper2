@@ -1,7 +1,7 @@
 {
   "name": "codeacejumper2",
   "displayName": "Code Ace Jumper 2",
-  "description": "Extension heavily inspired by Lucax88x's Code Ace Jumper",
+  "description": "Blazingly fast, smart, accurate and easy-to-use cursor movement",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
