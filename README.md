@@ -1,6 +1,6 @@
 # Code Ace Jumper 2
 
-Blazingly fast, smart, accurate and easy-to-use cursor movement heavily inspired from [CodeAceJumper](https://github.com/lucax88x/CodeAceJumper)
+Blazingly fast, smart, accurate and easy-to-use cursor jumper heavily inspired from [CodeAceJumper](https://github.com/lucax88x/CodeAceJumper)
 
 ## Commands
 
