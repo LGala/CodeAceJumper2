@@ -2,13 +2,9 @@
 
 Blazingly fast, smart, accurate and easy-to-use cursor movement heavily inspired from [CodeAceJumper](https://github.com/lucax88x/CodeAceJumper)
 
-<br>
-
 ## Commands
 
 with `codeacejumper2.singlechar.jump` you can type a single char and put placeholders into the jumpable positions
-
-<br>
 
 ## Extension Settings
 
