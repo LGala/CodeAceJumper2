@@ -1,7 +1,12 @@
 {
   "name": "codeacejumper2",
-  "displayName": "CodeAceJumper2",
-  "description": "",
+  "displayName": "Code Ace Jumper 2",
+  "description": "Extension heavily inspired by Lucax88x's Code Ace Jumper",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LGala/CodeAceJumper2.git"
+  },
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.77.0"
@@ -14,8 +19,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "codeacejumper2.helloWorld",
-        "title": "Hello World"
+        "command": "codeacejumper2.singlechar.jump",
+        "title": "Code Ace Jumper 2: Single Char Jump"
       }
     ]
   },
