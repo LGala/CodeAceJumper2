@@ -1,7 +1,7 @@
 {
   "name": "codeacejumper2",
   "displayName": "Code Ace Jumper 2",
-  "description": "Blazingly fast, smart, accurate and easy-to-use cursor movement",
+  "description": "Blazingly fast, smart, accurate and easy-to-use cursor jumper",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
