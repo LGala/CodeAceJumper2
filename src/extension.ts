@@ -76,6 +76,7 @@ const getDecoration = (contentText: string) =>
 		letterSpacing: '-16px',
 		opacity: '0',
 		after: {
+			margin: '1px',
 			backgroundColor: getSetting('codeacejumper2.placeholder.backgroundColor', '#f0e749'),
 			color: getSetting('codeacejumper2.placeholder.color', '#0f18b6'),
 			fontWeight: 'bolder',
@@ -99,7 +100,7 @@ const getPlaceholder = ({ absoluteIndex }: Char, placeholderGenerator: Increment
 const isCharJumpable = ({ char, absoluteIndex }: Char, visibleChars: string[], selectedChar: string): boolean =>
 	char.toLowerCase() === selectedChar &&
 	selectedChar !== '\n' &&
-	(/[\p{P}\s\n]/gu.test(char) || /[\p{P}\s\n]/gu.test(visibleChars[absoluteIndex - 1]) || absoluteIndex === 0);
+	(/[\p{P}\s\n]/gu.test(char) || /[^a-z0-9]/gi.test(visibleChars[absoluteIndex - 1]) || absoluteIndex === 0);
 
 const getInitialPlaceholders = (selectedChar: string): Placeholder[] => {
 	const visibleChars = getVisibleChars();
