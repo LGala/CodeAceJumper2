@@ -3,12 +3,30 @@
   "displayName": "Code Ace Jumper 2",
   "description": "Blazingly fast, smart, accurate and easy-to-use cursor jumper",
   "icon": "images/icon.png",
+  "keywords": [
+    "acejump",
+    "codeacejumper",
+    "codenav",
+    "codenavigator",
+    "easymotion",
+    "emacs",
+    "extension",
+    "jump",
+    "jumping",
+    "jumpnav",
+    "jumpy",
+    "navigation",
+    "navigator",
+    "navigate",
+    "sublime",
+    "vim"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/LGala/CodeAceJumper2.git"
   },
   "publisher": "LGala",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "engines": {
     "vscode": "^1.77.0"
   },
@@ -20,8 +38,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "codeacejumper2.singlechar.jump",
-        "title": "Code Ace Jumper 2: Single Char Jump"
+        "command": "codeacejumper2.singlechar.mode",
+        "title": "Code Ace Jumper 2: Single Char Mode"
       }
     ]
   },

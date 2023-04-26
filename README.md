@@ -4,7 +4,7 @@ Blazingly fast, smart, accurate and easy-to-use cursor jumper heavily inspired f
 
 ## Commands
 
-with `codeacejumper2.singlechar.jump` you can type a single char and put placeholders into the jumpable positions
+with `codeacejumper2.singlechar.mode` you can type a single char and put placeholders into the jumpable positions
 
 ## Extension Settings
 
