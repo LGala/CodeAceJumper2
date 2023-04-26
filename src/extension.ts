@@ -12,7 +12,7 @@ import {
 
 type Placeholder = { range: Range; decoration: TextEditorDecorationType; placeholder: string };
 type Char = { char: string; absoluteIndex: number };
-type SingleCharJumpStatus = 'init' | 'wait-to-jump-for-another-typing' | 'want-to-exit';
+type SingleCharModeStatus = 'init' | 'wait-to-jump-for-another-typing' | 'want-to-exit';
 
 export class IncrementalStringGenerator {
 	private alphabet: string;
@@ -140,7 +140,7 @@ const getPlaceholdersWithSelectedCharRemoved = (placeholders: Placeholder[], sel
 const tryJumpToPlaceholder = (
 	placeholders: Placeholder[],
 	selctedChar: string,
-): [SingleCharJumpStatus, Placeholder[]] => {
+): [SingleCharModeStatus, Placeholder[]] => {
 	if (placeholders.at(0)?.placeholder.length! > 1) {
 		const nextPlaceHolders = getPlaceholdersWithSelectedCharRemoved(placeholders, selctedChar);
 		removePlaceholders(placeholders);
@@ -161,7 +161,7 @@ const tryJumpToPlaceholder = (
 	return ['want-to-exit', placeholders];
 };
 
-const earlyJumpOrPutPlaceholders = (placeholders: Placeholder[]): SingleCharJumpStatus => {
+const earlyJumpOrPutPlaceholders = (placeholders: Placeholder[]): SingleCharModeStatus => {
 	if (!placeholders.length) {
 		return 'want-to-exit';
 	}
@@ -179,7 +179,7 @@ const checkIfShouldExit = (
 	placeholders: Placeholder[],
 	command: Disposable,
 	selectedChar: string,
-	status: SingleCharJumpStatus,
+	status: SingleCharModeStatus,
 ) => {
 	if (selectedChar === '\n' || status === 'want-to-exit') {
 		removePlaceholders(placeholders);
@@ -187,10 +187,8 @@ const checkIfShouldExit = (
 	}
 };
 
-const singleCharJump = () => {
-	console.log(workspace.getConfiguration().get('codeacejumper2.placeholder.color', 'hello'));
-
-	let status: SingleCharJumpStatus = 'init';
+const singleCharMode = () => {
+	let status: SingleCharModeStatus = 'init';
 	let placeholders: Placeholder[];
 
 	const command = commands.registerCommand('type', ({ text: selectedChar }: { text: string }) => {
@@ -210,5 +208,5 @@ const singleCharJump = () => {
 };
 
 export function activate(context: ExtensionContext) {
-	context.subscriptions.push(commands.registerCommand('codeacejumper2.singlechar.jump', singleCharJump));
+	context.subscriptions.push(commands.registerCommand('codeacejumper2.singlechar.mode', singleCharMode));
 }
